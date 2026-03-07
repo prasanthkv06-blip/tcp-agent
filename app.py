@@ -129,6 +129,8 @@ if uploaded_file is not None:
                         "duration_days":      totals["duration_days"],
                         "dep_datetime":       v["dep_datetime"],
                         "arr_datetime":       v["arr_datetime"],
+                        "dep_row":            v["dep_row"],
+                        "arr_row":            v["arr_row"],
                         "cargo_density":      aux.get("cargo_density"),
                         "lcv":                aux.get("lcv"),
                         "charter_year":       1,

@@ -193,7 +193,7 @@ LOCAL_LLM_URL   = "http://localhost:11434/api/generate"
 # AI Analyst settings  (Claude-powered review)
 # ---------------------------------------------------------------------------
 AI_ANALYST_MODEL      = "claude-sonnet-4-6"
-AI_ANALYST_MAX_TOKENS = 4096
+AI_ANALYST_MAX_TOKENS = 8192
 AI_ANALYST_TEMPERATURE = 0
 
 # ---------------------------------------------------------------------------

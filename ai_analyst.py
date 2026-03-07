@@ -106,6 +106,61 @@ Return ONLY the JSON array, no other text.
 
 
 # =============================================================================
+# JSON Recovery
+# =============================================================================
+
+def _salvage_truncated_json(content: str) -> list[dict]:
+    """
+    Attempt to recover complete alert objects from truncated JSON.
+
+    When Claude's response is cut off at max_tokens, the JSON array is
+    incomplete. We find the last complete object by looking for the last
+    '}' that closes a valid alert, then close the array.
+    """
+    # Find the position of the last complete object
+    # Look for '},\n' or '}\n' patterns (end of an alert object)
+    last_complete = -1
+    brace_depth = 0
+    in_string = False
+    escape_next = False
+
+    for i, ch in enumerate(content):
+        if escape_next:
+            escape_next = False
+            continue
+        if ch == '\\' and in_string:
+            escape_next = True
+            continue
+        if ch == '"' and not escape_next:
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if ch == '{':
+            brace_depth += 1
+        elif ch == '}':
+            brace_depth -= 1
+            if brace_depth == 1:  # closed a top-level object in the array
+                last_complete = i
+
+    if last_complete <= 0:
+        return []
+
+    # Take content up to and including the last complete object, close array
+    truncated = content[:last_complete + 1].rstrip().rstrip(',') + "\n]"
+
+    try:
+        alerts = json.loads(truncated)
+        if isinstance(alerts, list):
+            logger.info("Salvaged %d complete alert(s) from truncated response", len(alerts))
+            return alerts
+    except json.JSONDecodeError:
+        pass
+
+    return []
+
+
+# =============================================================================
 # Data Preparation
 # =============================================================================
 
@@ -302,16 +357,8 @@ def review_voyage(
 
     # Build context
     metadata = voyage_result["metadata"]
-    dep_row = voyage_result["computed"]["totals"].get("dep_row")
-    arr_row = voyage_result["computed"]["totals"].get("arr_row")
-
-    # Fallback: get dep/arr rows from metadata if not in totals
-    if dep_row is None:
-        # Try to parse from segment_info
-        seg_info = voyage_result["computed"].get("segment_info", [])
-        if seg_info:
-            dep_row = seg_info[0].get("start_row_idx", 0)
-            arr_row = seg_info[-1].get("end_row_idx", len(df) - 1)
+    dep_row = metadata.get("dep_row")
+    arr_row = metadata.get("arr_row")
 
     # Build the data context for Claude
     raw_context = ""
@@ -347,7 +394,22 @@ def review_voyage(
             if content.endswith("```"):
                 content = content[:-3].strip()
 
-        alerts = json.loads(content)
+        # Check if response was truncated (hit max_tokens)
+        was_truncated = (
+            response.stop_reason == "max_tokens"
+            or response.stop_reason == "end_turn" and not content.rstrip().endswith("]")
+        )
+
+        try:
+            alerts = json.loads(content)
+        except json.JSONDecodeError:
+            if was_truncated or not content.rstrip().endswith("]"):
+                # Truncated JSON — try to salvage complete alert objects
+                logger.info("AI response was truncated, salvaging partial alerts...")
+                alerts = _salvage_truncated_json(content)
+            else:
+                logger.warning("AI analyst returned invalid JSON")
+                return []
 
         if not isinstance(alerts, list):
             logger.warning("AI analyst returned non-list response: %s", type(alerts))
