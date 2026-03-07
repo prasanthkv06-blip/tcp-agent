@@ -8,6 +8,7 @@ Deploy:       Push to GitHub → connect to Streamlit Community Cloud
 """
 
 import logging
+import os
 import tempfile
 from pathlib import Path
 
@@ -18,6 +19,15 @@ except ImportError:
     pass
 
 import streamlit as st
+
+# Streamlit Cloud secrets → environment variables
+# (Streamlit Cloud stores secrets in st.secrets, but our code reads os.environ)
+try:
+    for key in ("ANTHROPIC_API_KEY", "OPENAI_API_KEY"):
+        if key in st.secrets and key not in os.environ:
+            os.environ[key] = st.secrets[key]
+except Exception:
+    pass
 
 # -- Pipeline imports (same directory) --
 from config import load_vessel_config, COL
