@@ -1,0 +1,43 @@
+# Virtual environment
+venv/
+.venv/
+
+# Environment variables (API keys!)
+.env
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Excel temp files
+~$*.xlsx
+
+# Output files (generated reports)
+test_report.xlsx
+claim_output.xlsx
+claim_output.txt
+idasah_report.xlsx
+_auto_template.xlsx
+
+# Raw data files (sensitive/large)
+*.xlsx
+!requirements.txt
+
+# Log files
+*.log
+
+# JSON output
+claim_output_warranties.json
+sample_warranties.json
+
+# Junk files
+=0.40
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
