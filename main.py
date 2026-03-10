@@ -105,6 +105,7 @@ def run(args: argparse.Namespace) -> None:
     from calculator import compute_all_segments
     from template_filler import fill_template
     from ai_analyst import review_voyage
+    from highlight_report import generate_highlighted_report
 
     # ── Load vessel configuration ────────────────────────────────────────
     vessel_config = load_vessel_config(args.vessel)
@@ -255,9 +256,17 @@ def run(args: argparse.Namespace) -> None:
                       f"No AI review (API key not set or review skipped)")
 
     # ── 5. Generate output Excel ─────────────────────────────────────────
-    print(f"\n[5/5]  Generating report: {output_path} ...")
+    print(f"\n[5/6]  Generating voyage report: {output_path} ...")
     fill_template(output_path, voyage_results, vessel_config)
-    print(f"\n  OK  Report saved to: {output_path.resolve()}")
+    print(f"  OK  Report saved to: {output_path.resolve()}")
+
+    # ── 6. Generate highlighted raw data report ────────────────────────
+    highlight_path = output_path.parent / (
+        input_path.stem + "_highlighted.xlsx"
+    )
+    print(f"\n[6/6]  Generating highlighted raw data: {highlight_path} ...")
+    generate_highlighted_report(input_path, highlight_path, voyages, sheet_name=args.sheet)
+    print(f"  OK  Highlighted report saved to: {highlight_path.resolve()}")
 
     # Print summary
     print("\n" + "=" * 60)

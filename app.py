@@ -38,6 +38,7 @@ from data_extractor import (
 from calculator import compute_all_segments
 from template_filler import fill_template
 from ai_analyst import review_voyage
+from highlight_report import generate_highlighted_report
 
 logger = logging.getLogger(__name__)
 
@@ -195,9 +196,24 @@ if uploaded_file is not None:
                 with open(tmp_output_path, "rb") as f:
                     output_bytes = f.read()
 
+                # -- 6. Generate highlighted raw data report --
+                with tempfile.NamedTemporaryFile(
+                    suffix=".xlsx", delete=False
+                ) as tmp_hl:
+                    tmp_highlight_path = tmp_hl.name
+
+                generate_highlighted_report(
+                    tmp_input_path, tmp_highlight_path,
+                    voyages, sheet_name=sheet_name,
+                )
+
+                with open(tmp_highlight_path, "rb") as f:
+                    highlight_bytes = f.read()
+
                 # -- Clean up temp files --
                 Path(tmp_input_path).unlink(missing_ok=True)
                 Path(tmp_output_path).unlink(missing_ok=True)
+                Path(tmp_highlight_path).unlink(missing_ok=True)
 
                 # -- Display results --
                 st.divider()
@@ -330,23 +346,33 @@ if uploaded_file is not None:
                             f"_{a.get('details', '')}_"
                         )
 
-                # -- Download button --
+                # -- Download buttons --
                 st.divider()
-                output_filename = (
+                base_name = (
                     uploaded_file.name.replace(".xlsx", "")
                     .replace(".xls", "")
-                    + "_report.xlsx"
-                )
-                st.download_button(
-                    label="Download Report",
-                    data=output_bytes,
-                    file_name=output_filename,
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    type="primary",
-                    use_container_width=True,
                 )
 
-                st.success("Report generated successfully!")
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.download_button(
+                        label="Download Voyage Report",
+                        data=output_bytes,
+                        file_name=f"{base_name}_report.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        type="primary",
+                        use_container_width=True,
+                    )
+                with col2:
+                    st.download_button(
+                        label="Download Highlighted Raw Data",
+                        data=highlight_bytes,
+                        file_name=f"{base_name}_highlighted.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        use_container_width=True,
+                    )
+
+                st.success("Reports generated successfully!")
 
             except Exception as e:
                 st.error(f"Error processing file: {e}")
