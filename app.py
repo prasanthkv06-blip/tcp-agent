@@ -201,64 +201,96 @@ if uploaded_file is not None:
                 st.divider()
                 st.subheader("Voyage Summary")
 
+                # Build summary table rows
+                import pandas as pd
+
+                summary_rows = []
                 for vr in voyage_results:
                     m = vr["metadata"]
                     t = vr["computed"]["totals"]
-                    n_seg = len(vr["computed"]["segments"])
+                    segments = vr["computed"]["segments"]
 
-                    st.markdown(
-                        f"**Voyage {m['voyage_no']} — {m['voyage_type']}**"
-                    )
+                    if len(segments) <= 1:
+                        # Single segment — one row
+                        summary_rows.append({
+                            "Voyage": m["voyage_no"],
+                            "Type": m["voyage_type"],
+                            "From": m.get("load_port", "") or "-",
+                            "To": m.get("discharge_port", "") or "-",
+                            "Departure": str(m["dep_datetime"])[:16],
+                            "Arrival": str(m["arr_datetime"])[:16],
+                            "Distance (nm)": f"{t['distance']:.1f}",
+                            "Duration (days)": f"{t['duration_days']:.2f}",
+                            "Avg Speed (kts)": f"{t['actual_avg_speed']:.2f}",
+                            "LNG (m\u00b3)": f"{t['lng_consumed']:.1f}",
+                            "MGO (MT)": f"{t['mgo_consumed']:.2f}",
+                            "VLSFO (MT)": f"{t['vlsfo_consumed']:.2f}",
+                        })
+                    else:
+                        # Multiple segments — one row per segment + voyage total
+                        for i, seg in enumerate(segments, 1):
+                            summary_rows.append({
+                                "Voyage": f"{m['voyage_no']} Seg {i}",
+                                "Type": m["voyage_type"],
+                                "From": m.get("load_port", "") or "-" if i == 1 else "-",
+                                "To": m.get("discharge_port", "") or "-" if i == len(segments) else "-",
+                                "Departure": str(seg["start_datetime"])[:16],
+                                "Arrival": str(seg["end_datetime"])[:16],
+                                "Distance (nm)": f"{seg['distance']:.1f}",
+                                "Duration (days)": f"{seg['duration_days']:.2f}",
+                                "Avg Speed (kts)": f"{seg['actual_avg_speed']:.2f}",
+                                "LNG (m\u00b3)": f"{seg['lng_consumed']:.1f}",
+                                "MGO (MT)": f"{seg['mgo_consumed']:.2f}",
+                                "VLSFO (MT)": f"{seg['vlsfo_consumed']:.2f}",
+                            })
+                        # Voyage total row
+                        summary_rows.append({
+                            "Voyage": f"{m['voyage_no']} TOTAL",
+                            "Type": m["voyage_type"],
+                            "From": m.get("load_port", "") or "-",
+                            "To": m.get("discharge_port", "") or "-",
+                            "Departure": str(m["dep_datetime"])[:16],
+                            "Arrival": str(m["arr_datetime"])[:16],
+                            "Distance (nm)": f"{t['distance']:.1f}",
+                            "Duration (days)": f"{t['duration_days']:.2f}",
+                            "Avg Speed (kts)": f"{t['actual_avg_speed']:.2f}",
+                            "LNG (m\u00b3)": f"{t['lng_consumed']:.1f}",
+                            "MGO (MT)": f"{t['mgo_consumed']:.2f}",
+                            "VLSFO (MT)": f"{t['vlsfo_consumed']:.2f}",
+                        })
 
-                    col1, col2, col3 = st.columns(3)
-                    col1.metric("Distance", f"{t['distance']:.1f} nm")
-                    col2.metric("Duration", f"{t['duration_days']:.2f} days")
-                    col3.metric("Avg Speed", f"{t['actual_avg_speed']:.2f} kts")
+                summary_df = pd.DataFrame(summary_rows)
+                st.dataframe(summary_df, use_container_width=True, hide_index=True)
 
-                    col4, col5, col6 = st.columns(3)
-                    col4.metric("LNG", f"{t['lng_consumed']:.1f} m\u00b3")
-                    col5.metric("MGO", f"{t['mgo_consumed']:.2f} MT")
-                    col6.metric("VLSFO", f"{t['vlsfo_consumed']:.2f} MT")
-
-                    if t.get("excl_mgo_weather", 0) > 0:
-                        st.caption(
-                            f"Weather exclusions: "
-                            f"MGO {t['excl_mgo_weather']:.2f} MT, "
-                            f"LNG {t['excl_lng_weather']:.1f} m\u00b3, "
-                            f"VLSFO {t['excl_vlsfo_weather']:.2f} MT"
-                        )
-
-                    st.caption(f"{n_seg} segment(s) detected")
+                # Alerts below the table
+                for vr in voyage_results:
+                    m = vr["metadata"]
 
                     # Speed anomalies (Rule A)
                     anomalies = vr["computed"].get("speed_anomalies", [])
                     if anomalies:
                         st.warning(
+                            f"Voyage {m['voyage_no']}: "
                             f"{len(anomalies)} speed anomaly(ies) detected"
                         )
-                        for a in anomalies:
-                            st.caption(
-                                f"  {str(a['datetime'])[:16]}: "
-                                f"speed={a['avg_speed']:.1f} kts "
-                                f"(weighted avg: {a['weighted_avg']:.1f} kts)"
-                            )
 
                     # Intermediate stops (Rule B)
                     stops = m.get("intermediate_stops", [])
                     if stops:
                         st.info(
+                            f"Voyage {m['voyage_no']}: "
                             f"{len(stops)} mid-voyage bunkering stop(s)"
                         )
-                        for s in stops:
-                            st.caption(
-                                f"  {s['port_name']}: "
-                                f"{s['arr_datetime']} \u2192 {s['dep_datetime']} "
-                                f"({s['duration_hours']:.1f} hrs, "
-                                f"LNG: {s['lng_consumed']:.1f} m\u00b3, "
-                                f"MGO: {s['mgo_consumed']:.2f} MT)"
-                            )
 
-                    st.divider()
+                    # Weather exclusions
+                    t = vr["computed"]["totals"]
+                    if t.get("excl_mgo_weather", 0) > 0:
+                        st.caption(
+                            f"Voyage {m['voyage_no']} weather exclusions: "
+                            f"MGO {t['excl_mgo_weather']:.2f} MT, "
+                            f"LNG {t['excl_lng_weather']:.1f} m\u00b3, "
+                            f"VLSFO {t['excl_vlsfo_weather']:.2f} MT"
+                        )
 
                 # -- AI Review section --
                 all_alerts = []
