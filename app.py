@@ -30,7 +30,7 @@ except Exception:
     pass
 
 # -- Pipeline imports (same directory) --
-from config import load_vessel_config, COL
+from config import load_vessel_config, parse_fuel_table_csv, COL
 from data_extractor import (
     load_raw_excel, detect_voyages, extract_voyage_data, extract_auxiliary,
     merge_bunkering_stops, tag_intermediate_stops,
@@ -68,6 +68,11 @@ with st.sidebar:
     st.header("Settings")
     vessel_name = st.text_input("Vessel Name", value="", placeholder="e.g. Id'Asah")
     sheet_name = st.text_input("Excel Sheet Name", value="Sheet")
+    enable_ai_review = st.checkbox("Enable AI Review", value=False,
+                                   help="Uses Claude AI to review the report. Slower but adds expert analysis.")
+    with st.expander("Fuel Table (optional)"):
+        st.caption("Upload a CSV with columns: speed, laden_gas, laden_pilot, ballast_gas, ballast_pilot")
+        fuel_csv = st.file_uploader("Fuel Table CSV", type=["csv"], label_visibility="collapsed")
 
 # -- File upload --
 uploaded_file = st.file_uploader(
@@ -89,6 +94,11 @@ if uploaded_file is not None:
             try:
                 # -- Load vessel config --
                 vessel_config = load_vessel_config(vessel_name)
+
+                # Override fuel table if CSV uploaded
+                if fuel_csv is not None:
+                    fuel_csv.seek(0)
+                    vessel_config["speed_consumption_table"] = parse_fuel_table_csv(fuel_csv)
 
                 # -- Save uploaded file to temp path --
                 with tempfile.NamedTemporaryFile(
@@ -157,15 +167,16 @@ if uploaded_file is not None:
                         "auxiliary": aux,
                     })
 
-                # -- 4. AI Analyst review --
-                ai_status = st.empty()
-                ai_status.info("AI Analyst is reviewing the report...")
+                # -- 4. AI Analyst review (optional) --
+                if enable_ai_review:
+                    ai_status = st.empty()
+                    ai_status.info("AI Analyst is reviewing the report...")
 
-                for vr in voyage_results:
-                    alerts = review_voyage(df, vr, vessel_config)
-                    vr["ai_alerts"] = alerts
+                    for vr in voyage_results:
+                        alerts = review_voyage(df, vr, vessel_config)
+                        vr["ai_alerts"] = alerts
 
-                ai_status.empty()
+                    ai_status.empty()
 
                 # -- 5. Generate output Excel --
                 with tempfile.NamedTemporaryFile(

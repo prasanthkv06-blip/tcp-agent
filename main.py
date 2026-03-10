@@ -83,6 +83,10 @@ def _build_parser() -> argparse.ArgumentParser:
         "--verbose", "-v", action="store_true",
         help="Enable DEBUG-level logging",
     )
+    p.add_argument(
+        "--no-ai", action="store_true",
+        help="Skip AI Analyst review (faster)",
+    )
     return p
 
 
@@ -234,24 +238,27 @@ def run(args: argparse.Namespace) -> None:
         })
 
     # ── 4. AI Analyst review ────────────────────────────────────────────
-    print("\n[4/5]  AI Analyst reviewing report ...")
-    for vr in voyage_results:
-        alerts = review_voyage(df, vr, vessel_config)
-        vr["ai_alerts"] = alerts
-        if alerts:
-            errors = sum(1 for a in alerts if a.get("severity") == "error")
-            warnings = sum(1 for a in alerts if a.get("severity") == "warning")
-            infos = sum(1 for a in alerts if a.get("severity") == "info")
-            print(f"    Voyage {vr['metadata']['voyage_no']}: "
-                  f"{errors} error(s), {warnings} warning(s), {infos} info(s)")
-            for a in alerts:
-                icon = {"error": "!!", "warning": "!", "info": "i"}.get(
-                    a.get("severity", ""), "?"
-                )
-                print(f"      [{icon}] {a.get('message', '')}")
-        else:
-            print(f"    Voyage {vr['metadata']['voyage_no']}: "
-                  f"No AI review (API key not set or review skipped)")
+    if getattr(args, "no_ai", False):
+        print("\n[4/5]  AI Analyst review skipped (--no-ai)")
+    else:
+        print("\n[4/5]  AI Analyst reviewing report ...")
+        for vr in voyage_results:
+            alerts = review_voyage(df, vr, vessel_config)
+            vr["ai_alerts"] = alerts
+            if alerts:
+                errors = sum(1 for a in alerts if a.get("severity") == "error")
+                warnings = sum(1 for a in alerts if a.get("severity") == "warning")
+                infos = sum(1 for a in alerts if a.get("severity") == "info")
+                print(f"    Voyage {vr['metadata']['voyage_no']}: "
+                      f"{errors} error(s), {warnings} warning(s), {infos} info(s)")
+                for a in alerts:
+                    icon = {"error": "!!", "warning": "!", "info": "i"}.get(
+                        a.get("severity", ""), "?"
+                    )
+                    print(f"      [{icon}] {a.get('message', '')}")
+            else:
+                print(f"    Voyage {vr['metadata']['voyage_no']}: "
+                      f"No AI review (API key not set or review skipped)")
 
     # ── 5. Generate output Excel ─────────────────────────────────────────
     print(f"\n[5/5]  Generating report: {output_path} ...")

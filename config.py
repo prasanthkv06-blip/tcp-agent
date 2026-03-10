@@ -232,6 +232,39 @@ def load_vessel_config(vessel_name: str = "Id'Asah") -> dict:
     return cfg
 
 
+def parse_fuel_table_csv(csv_content) -> dict:
+    """
+    Parse a fuel table CSV into speed_consumption_table format.
+
+    Expected CSV columns: speed, laden_gas, laden_pilot, ballast_gas, ballast_pilot
+    Returns {speed: (laden_gas, laden_pilot, ballast_gas, ballast_pilot)} dict.
+    """
+    import csv
+    import io
+
+    if hasattr(csv_content, "read"):
+        text = csv_content.read()
+        if isinstance(text, bytes):
+            text = text.decode("utf-8")
+    else:
+        text = str(csv_content)
+
+    table = {}
+    reader = csv.DictReader(io.StringIO(text))
+    for row in reader:
+        speed = float(row["speed"])
+        table[speed] = (
+            float(row["laden_gas"]),
+            float(row["laden_pilot"]),
+            float(row["ballast_gas"]),
+            float(row["ballast_pilot"]),
+        )
+
+    if not table:
+        raise ValueError("Fuel table CSV is empty or has incorrect column names.")
+    return table
+
+
 def _VESSEL_REGISTRY() -> dict:
     """Registry of known vessel configurations."""
     return {
