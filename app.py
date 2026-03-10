@@ -89,20 +89,8 @@ if uploaded_file is not None:
 
     if st.button("Generate Report", type="primary", use_container_width=True):
 
-        if not vessel_name.strip():
-            st.error("Please enter a Vessel Name in the sidebar.")
-            st.stop()
-
         with st.spinner("Processing..."):
             try:
-                # -- Load vessel config --
-                vessel_config = load_vessel_config(vessel_name)
-
-                # Override fuel table if CSV uploaded
-                if fuel_csv is not None:
-                    fuel_csv.seek(0)
-                    vessel_config["speed_consumption_table"] = parse_fuel_table_csv(fuel_csv)
-
                 # -- Save uploaded file to temp path --
                 with tempfile.NamedTemporaryFile(
                     suffix=".xlsx", delete=False
@@ -125,6 +113,24 @@ if uploaded_file is not None:
 
                 voyages = merge_bunkering_stops(df, voyages)
 
+                # Rule 6: Auto-detect vessel name from data if not entered
+                effective_vessel_name = vessel_name.strip()
+                if not effective_vessel_name:
+                    raw_name = voyages[0].get("vessel_name", "")
+                    if raw_name:
+                        effective_vessel_name = raw_name
+                    else:
+                        st.error("Please enter a Vessel Name in the sidebar.")
+                        st.stop()
+
+                # -- Load vessel config --
+                vessel_config = load_vessel_config(effective_vessel_name)
+
+                # Override fuel table if CSV uploaded
+                if fuel_csv is not None:
+                    fuel_csv.seek(0)
+                    vessel_config["speed_consumption_table"] = parse_fuel_table_csv(fuel_csv)
+
                 # -- 3. Process each voyage --
                 voyage_results = []
 
@@ -140,18 +146,14 @@ if uploaded_file is not None:
                     computed = compute_all_segments(vd, vessel_config)
                     totals = computed["totals"]
 
-                    # Metadata for template
-                    discharge_port = ""
-                    dp = df.iloc[v["dep_row"], COL["next_port"]]
-                    if dp and str(dp) != "nan":
-                        discharge_port = str(dp)
-
+                    # Rule 6: Use extracted port details
                     metadata = {
                         "voyage_no":          v["voyage_no"],
                         "voyage_type":        v["voyage_type"],
                         "fuel_mode":          v["fuel_mode"],
-                        "load_port":          "",
-                        "discharge_port":     discharge_port,
+                        "vessel_name":        v.get("vessel_name", ""),
+                        "load_port":          v.get("last_port", ""),
+                        "discharge_port":     v.get("next_port", ""),
                         "distance":           totals["distance"],
                         "duration_days":      totals["duration_days"],
                         "dep_datetime":       v["dep_datetime"],

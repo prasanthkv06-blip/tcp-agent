@@ -72,10 +72,13 @@ def detect_voyages(df: pd.DataFrame) -> list[dict]:
       - dep_row:      int — DataFrame row index of DEPARTURE
       - arr_row:      int — DataFrame row index of ARRIVAL
       - voyage_no:    str — from Col B (index 1)
-      - voyage_type:  str — "LADEN" or "BALLAST" from Col G (index 6)
+      - voyage_type:  str — "LADEN" or "BALLAST" (Rule 6: from Condition col, fallback to portcall_type)
       - fuel_mode:    str — from Col K (index 10)
       - dep_datetime: str — departure date/time from Col C (index 2)
       - arr_datetime: str — arrival date/time from Col C (index 2)
+      - vessel_name:  str — from Col A (Rule 6)
+      - last_port:    str — departure port from Col I (Rule 6)
+      - next_port:    str — destination port from Col J (Rule 6)
     """
     rt_col = COL["report_type"]
     voyages = []
@@ -89,18 +92,35 @@ def detect_voyages(df: pd.DataFrame) -> list[dict]:
             logger.debug("DEPARTURE found at row %d", i)
 
         elif rt == "ARRIVAL" and dep_row is not None:
-            # Determine voyage type from Col G of the DEPARTURE row
-            portcall = str(df.iloc[dep_row, COL["portcall_type"]]).strip().lower()
-            if portcall.startswith("load"):
-                voyage_type = "LADEN"
-            elif portcall.startswith("discharge"):
-                voyage_type = "BALLAST"
-            else:
-                voyage_type = portcall.upper()
-                logger.warning(
-                    "Unknown portcall type '%s' at row %d — using as-is",
-                    portcall, dep_row,
-                )
+            # Rule 6: Determine voyage type from Condition column (Col BC)
+            # Fallback to portcall_type (Col G) if Condition is empty
+            voyage_type = ""
+            if "condition" in COL:
+                cond = df.iloc[dep_row, COL["condition"]]
+                if pd.notna(cond) and str(cond).strip():
+                    cond_str = str(cond).strip().upper()
+                    if cond_str in ("LADEN", "BALLAST"):
+                        voyage_type = cond_str
+                    elif "LADEN" in cond_str or "LOAD" in cond_str:
+                        voyage_type = "LADEN"
+                    elif "BALLAST" in cond_str:
+                        voyage_type = "BALLAST"
+                    else:
+                        voyage_type = cond_str
+
+            if not voyage_type:
+                # Fallback to Col G (portcall_type)
+                portcall = str(df.iloc[dep_row, COL["portcall_type"]]).strip().lower()
+                if portcall.startswith("load"):
+                    voyage_type = "LADEN"
+                elif portcall.startswith("discharge"):
+                    voyage_type = "BALLAST"
+                else:
+                    voyage_type = portcall.upper()
+                    logger.warning(
+                        "Unknown portcall type '%s' at row %d — using as-is",
+                        portcall, dep_row,
+                    )
 
             voyage_no = str(df.iloc[dep_row, COL["voyage_no"]]) if pd.notna(
                 df.iloc[dep_row, COL["voyage_no"]]
@@ -113,6 +133,24 @@ def detect_voyages(df: pd.DataFrame) -> list[dict]:
             dep_dt = str(df.iloc[dep_row, COL["datetime"]])
             arr_dt = str(df.iloc[i, COL["datetime"]])
 
+            # Rule 6: Extract vessel name, ports from raw data
+            raw_vessel = ""
+            if "vessel_name" in COL:
+                v = df.iloc[dep_row, COL["vessel_name"]]
+                if pd.notna(v) and str(v).strip():
+                    raw_vessel = str(v).strip()
+
+            dep_port = ""
+            if "last_port" in COL:
+                lp = df.iloc[dep_row, COL["last_port"]]
+                if pd.notna(lp) and str(lp).strip():
+                    dep_port = str(lp).strip()
+
+            dest_port = ""
+            np_val = df.iloc[dep_row, COL["next_port"]]
+            if pd.notna(np_val) and str(np_val).strip():
+                dest_port = str(np_val).strip()
+
             voyages.append({
                 "dep_row":      dep_row,
                 "arr_row":      i,
@@ -121,6 +159,9 @@ def detect_voyages(df: pd.DataFrame) -> list[dict]:
                 "fuel_mode":    fuel_mode,
                 "dep_datetime": dep_dt,
                 "arr_datetime": arr_dt,
+                "vessel_name":  raw_vessel,
+                "last_port":    dep_port,
+                "next_port":    dest_port,
             })
 
             logger.info(

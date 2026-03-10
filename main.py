@@ -205,20 +205,14 @@ def run(args: argparse.Namespace) -> None:
                       f"speed={a['avg_speed']:.1f} kts "
                       f"(weighted avg: {a['weighted_avg']:.1f} kts)")
 
-        # Build metadata for template
-        from config import COL
-        discharge_port = ""
-        if v["dep_row"] < len(df):
-            dp = df.iloc[v["dep_row"], COL["next_port"]]
-            if dp and str(dp) != "nan":
-                discharge_port = str(dp)
-
+        # Rule 6: Use extracted port details
         metadata = {
             "voyage_no":           v["voyage_no"],
             "voyage_type":         v["voyage_type"],
             "fuel_mode":           v["fuel_mode"],
-            "load_port":           "",
-            "discharge_port":      discharge_port,
+            "vessel_name":         v.get("vessel_name", ""),
+            "load_port":           v.get("last_port", ""),
+            "discharge_port":      v.get("next_port", ""),
             "distance":            totals["distance"],
             "duration_days":       totals["duration_days"],
             "dep_datetime":        v["dep_datetime"],

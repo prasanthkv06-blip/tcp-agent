@@ -20,7 +20,10 @@ logger = logging.getLogger(__name__)
 # COL (below) are just fallback defaults; resolve_columns() overwrites them.
 
 COL_HEADERS = {
-    # ── Voyage identification (Rule 1) ──────────────────────────────────────
+    # ── Vessel / voyage identification (Rule 1 & 6) ─────────────────────────
+    "vessel_name":      "Vessel Name",
+    "last_port":        "Departure Port",
+    "condition":        "Condition",
     "voyage_no":        "Voyage No",
     "datetime":         "Date/Time (UTC)",
     "portcall_type":    "Type of Portcall",
@@ -83,6 +86,9 @@ COL_HEADERS = {
 # synthetic DataFrames that use integer column indices).
 
 COL = {
+    "vessel_name":      0,
+    "last_port":        8,
+    "condition":       54,
     "voyage_no":        1,
     "datetime":         2,
     "portcall_type":    6,
