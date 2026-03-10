@@ -70,9 +70,12 @@ with st.sidebar:
     sheet_name = st.text_input("Excel Sheet Name", value="Sheet")
     enable_ai_review = st.checkbox("Enable AI Review", value=False,
                                    help="Uses Claude AI to review the report. Slower but adds expert analysis.")
-    with st.expander("Fuel Table (optional)"):
-        st.caption("Upload a CSV with columns: speed, laden_gas, laden_pilot, ballast_gas, ballast_pilot")
-        fuel_csv = st.file_uploader("Fuel Table CSV", type=["csv"], label_visibility="collapsed")
+    st.divider()
+    st.caption("Fuel Table (optional)")
+    fuel_csv = st.file_uploader(
+        "Upload CSV: speed, laden_gas, laden_pilot, ballast_gas, ballast_pilot",
+        type=["csv"],
+    )
 
 # -- File upload --
 uploaded_file = st.file_uploader(
@@ -203,57 +206,59 @@ if uploaded_file is not None:
                     t = vr["computed"]["totals"]
                     n_seg = len(vr["computed"]["segments"])
 
-                    with st.expander(
-                        f"Voyage {m['voyage_no']} \u2014 {m['voyage_type']}",
-                        expanded=True,
-                    ):
-                        col1, col2, col3 = st.columns(3)
-                        col1.metric("Distance", f"{t['distance']:.1f} nm")
-                        col2.metric("Duration", f"{t['duration_days']:.2f} days")
-                        col3.metric("Avg Speed", f"{t['actual_avg_speed']:.2f} kts")
+                    st.markdown(
+                        f"**Voyage {m['voyage_no']} — {m['voyage_type']}**"
+                    )
 
-                        col4, col5, col6 = st.columns(3)
-                        col4.metric("LNG", f"{t['lng_consumed']:.1f} m\u00b3")
-                        col5.metric("MGO", f"{t['mgo_consumed']:.2f} MT")
-                        col6.metric("VLSFO", f"{t['vlsfo_consumed']:.2f} MT")
+                    col1, col2, col3 = st.columns(3)
+                    col1.metric("Distance", f"{t['distance']:.1f} nm")
+                    col2.metric("Duration", f"{t['duration_days']:.2f} days")
+                    col3.metric("Avg Speed", f"{t['actual_avg_speed']:.2f} kts")
 
-                        if t.get("excl_mgo_weather", 0) > 0:
+                    col4, col5, col6 = st.columns(3)
+                    col4.metric("LNG", f"{t['lng_consumed']:.1f} m\u00b3")
+                    col5.metric("MGO", f"{t['mgo_consumed']:.2f} MT")
+                    col6.metric("VLSFO", f"{t['vlsfo_consumed']:.2f} MT")
+
+                    if t.get("excl_mgo_weather", 0) > 0:
+                        st.caption(
+                            f"Weather exclusions: "
+                            f"MGO {t['excl_mgo_weather']:.2f} MT, "
+                            f"LNG {t['excl_lng_weather']:.1f} m\u00b3, "
+                            f"VLSFO {t['excl_vlsfo_weather']:.2f} MT"
+                        )
+
+                    st.caption(f"{n_seg} segment(s) detected")
+
+                    # Speed anomalies (Rule A)
+                    anomalies = vr["computed"].get("speed_anomalies", [])
+                    if anomalies:
+                        st.warning(
+                            f"{len(anomalies)} speed anomaly(ies) detected"
+                        )
+                        for a in anomalies:
                             st.caption(
-                                f"Weather exclusions: "
-                                f"MGO {t['excl_mgo_weather']:.2f} MT, "
-                                f"LNG {t['excl_lng_weather']:.1f} m\u00b3, "
-                                f"VLSFO {t['excl_vlsfo_weather']:.2f} MT"
+                                f"  {str(a['datetime'])[:16]}: "
+                                f"speed={a['avg_speed']:.1f} kts "
+                                f"(weighted avg: {a['weighted_avg']:.1f} kts)"
                             )
 
-                        st.caption(f"{n_seg} segment(s) detected")
-
-                        # Speed anomalies (Rule A)
-                        anomalies = vr["computed"].get("speed_anomalies", [])
-                        if anomalies:
-                            st.warning(
-                                f"{len(anomalies)} speed anomaly(ies) detected"
+                    # Intermediate stops (Rule B)
+                    stops = m.get("intermediate_stops", [])
+                    if stops:
+                        st.info(
+                            f"{len(stops)} mid-voyage bunkering stop(s)"
+                        )
+                        for s in stops:
+                            st.caption(
+                                f"  {s['port_name']}: "
+                                f"{s['arr_datetime']} \u2192 {s['dep_datetime']} "
+                                f"({s['duration_hours']:.1f} hrs, "
+                                f"LNG: {s['lng_consumed']:.1f} m\u00b3, "
+                                f"MGO: {s['mgo_consumed']:.2f} MT)"
                             )
-                            for a in anomalies:
-                                st.caption(
-                                    f"  {str(a['datetime'])[:16]}: "
-                                    f"speed={a['avg_speed']:.1f} kts "
-                                    f"(weighted avg: {a['weighted_avg']:.1f} kts)"
-                                )
 
-                        # Intermediate stops (Rule B)
-                        stops = m.get("intermediate_stops", [])
-                        if stops:
-                            st.info(
-                                f"{len(stops)} mid-voyage bunkering stop(s)"
-                            )
-                            for s in stops:
-                                st.caption(
-                                    f"  {s['port_name']}: "
-                                    f"{s['arr_datetime']} \u2192 {s['dep_datetime']} "
-                                    f"({s['duration_hours']:.1f} hrs, "
-                                    f"LNG: {s['lng_consumed']:.1f} m\u00b3, "
-                                    f"MGO: {s['mgo_consumed']:.2f} MT)"
-                                )
+                    st.divider()
 
                 # -- AI Review section --
                 all_alerts = []
@@ -268,29 +273,28 @@ if uploaded_file is not None:
                     warnings = [a for a in all_alerts if a.get("severity") == "warning"]
                     infos = [a for a in all_alerts if a.get("severity") == "info"]
 
-                    with st.expander(
-                        f"AI Review ({len(errors)} errors, "
-                        f"{len(warnings)} warnings, {len(infos)} info)",
-                        expanded=True,
-                    ):
-                        for a in errors:
-                            st.error(
-                                f"**[{a.get('category', '')}]** "
-                                f"{a.get('message', '')}\n\n"
-                                f"_{a.get('details', '')}_"
-                            )
-                        for a in warnings:
-                            st.warning(
-                                f"**[{a.get('category', '')}]** "
-                                f"{a.get('message', '')}\n\n"
-                                f"_{a.get('details', '')}_"
-                            )
-                        for a in infos:
-                            st.info(
-                                f"**[{a.get('category', '')}]** "
-                                f"{a.get('message', '')}\n\n"
-                                f"_{a.get('details', '')}_"
-                            )
+                    st.markdown(
+                        f"**AI Review** — {len(errors)} error(s), "
+                        f"{len(warnings)} warning(s), {len(infos)} info"
+                    )
+                    for a in errors:
+                        st.error(
+                            f"**[{a.get('category', '')}]** "
+                            f"{a.get('message', '')}\n\n"
+                            f"_{a.get('details', '')}_"
+                        )
+                    for a in warnings:
+                        st.warning(
+                            f"**[{a.get('category', '')}]** "
+                            f"{a.get('message', '')}\n\n"
+                            f"_{a.get('details', '')}_"
+                        )
+                    for a in infos:
+                        st.info(
+                            f"**[{a.get('category', '')}]** "
+                            f"{a.get('message', '')}\n\n"
+                            f"_{a.get('details', '')}_"
+                        )
 
                 # -- Download button --
                 st.divider()
