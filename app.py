@@ -64,26 +64,62 @@ st.markdown("Upload a raw noon-report Excel file to generate a voyage performanc
 
 st.divider()
 
-# -- Sidebar settings --
-with st.sidebar:
-    st.header("Settings")
-    vessel_name = st.text_input("Vessel Name", value="", placeholder="e.g. Id'Asah")
-    sheet_name = st.text_input("Excel Sheet Name", value="Sheet")
-    enable_ai_review = st.checkbox("Enable AI Review", value=False,
-                                   help="Uses Claude AI to review the report. Slower but adds expert analysis.")
-    st.divider()
-    st.caption("Fuel Table (optional)")
-    fuel_csv = st.file_uploader(
-        "Upload CSV: speed, laden_gas, laden_pilot, ballast_gas, ballast_pilot",
-        type=["csv"],
-    )
-
-# -- File upload --
+# -- File upload (before sidebar so we can auto-detect vessel name) --
 uploaded_file = st.file_uploader(
     "Upload Raw Noon-Report Excel",
     type=["xlsx", "xls"],
     help="The 340-column noon-report Excel file with DEPARTURE/ARRIVAL markers.",
 )
+
+# -- Auto-detect vessel name from uploaded file (Rule 6) --
+if uploaded_file is not None and st.session_state.get("_last_file") != uploaded_file.name:
+    try:
+        import pandas as pd
+        with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as _tmp:
+            _tmp.write(uploaded_file.getvalue())
+            _scan_path = _tmp.name
+        _scan_df = pd.read_excel(_scan_path, sheet_name=0, header=0)
+        # Look for "Vessel Name" column
+        _vessel_col = None
+        for _c in _scan_df.columns:
+            if str(_c).strip().lower() == "vessel name":
+                _vessel_col = _c
+                break
+        if _vessel_col is not None:
+            _raw_names = _scan_df[_vessel_col].dropna().unique()
+            if len(_raw_names) > 0:
+                st.session_state["detected_vessel"] = str(_raw_names[0]).strip()
+        st.session_state["_last_file"] = uploaded_file.name
+        Path(_scan_path).unlink(missing_ok=True)
+    except Exception:
+        pass
+
+# -- Known vessel registry for fuel table matching --
+from config import _VESSEL_REGISTRY
+_known_vessels = list(_VESSEL_REGISTRY().keys())
+
+# -- Sidebar settings --
+with st.sidebar:
+    st.header("Settings")
+    _detected = st.session_state.get("detected_vessel", "")
+    vessel_name = st.text_input("Vessel Name", value=_detected, placeholder="e.g. Id'Asah")
+
+    # Show fuel table status
+    if vessel_name.strip():
+        if vessel_name.strip() in _known_vessels:
+            st.caption(f"Fuel table: **{vessel_name.strip()}** (from database)")
+        else:
+            st.caption("Fuel table: not found in database — upload CSV or Id'Asah defaults will be used")
+
+    sheet_name = st.text_input("Excel Sheet Name", value="Sheet")
+    enable_ai_review = st.checkbox("Enable AI Review", value=False,
+                                   help="Uses Claude AI to review the report. Slower but adds expert analysis.")
+    st.divider()
+    st.caption("Fuel Table (optional — overrides database)")
+    fuel_csv = st.file_uploader(
+        "Upload CSV: speed, laden_gas, laden_pilot, ballast_gas, ballast_pilot",
+        type=["csv"],
+    )
 
 if uploaded_file is not None:
     st.success(f"Uploaded: **{uploaded_file.name}** ({uploaded_file.size / 1024:.0f} KB)")
