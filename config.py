@@ -223,12 +223,13 @@ def load_vessel_config(vessel_name: str = "Id'Asah") -> dict:
       speed_consumption_table, ageing_factors, port_cons
     """
     vessels = _VESSEL_REGISTRY()
-    if vessel_name not in vessels:
-        available = ", ".join(vessels.keys())
-        raise ValueError(
-            f"Unknown vessel '{vessel_name}'. Available: {available}"
-        )
-    return vessels[vessel_name]
+    if vessel_name in vessels:
+        return vessels[vessel_name]
+    # Unknown vessel — use Id'Asah defaults with the given name
+    cfg = dict(vessels["Id'Asah"])
+    cfg["name"] = vessel_name
+    cfg["imo"] = ""
+    return cfg
 
 
 def _VESSEL_REGISTRY() -> dict:
