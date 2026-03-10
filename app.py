@@ -66,7 +66,7 @@ st.divider()
 # -- Sidebar settings --
 with st.sidebar:
     st.header("Settings")
-    vessel_name = st.text_input("Vessel Name", value="Id'Asah")
+    vessel_name = st.text_input("Vessel Name", value="", placeholder="e.g. Id'Asah")
     sheet_name = st.text_input("Excel Sheet Name", value="Sheet")
 
 # -- File upload --
@@ -80,6 +80,10 @@ if uploaded_file is not None:
     st.success(f"Uploaded: **{uploaded_file.name}** ({uploaded_file.size / 1024:.0f} KB)")
 
     if st.button("Generate Report", type="primary", use_container_width=True):
+
+        if not vessel_name.strip():
+            st.error("Please enter a Vessel Name in the sidebar.")
+            st.stop()
 
         with st.spinner("Processing..."):
             try:
